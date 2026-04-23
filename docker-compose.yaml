@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   rspamd:
-    image: rspamd/rspamd:stable
+    image: rspamd/rspamd:latest
     container_name: jules-rspamd
     ports:
       - "11334:11334"
