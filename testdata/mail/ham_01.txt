@@ -1,0 +1,13 @@
+FROM: alice@example.com
+TO: bob@example.com
+SUBJECT: Lunch meeting tomorrow
+DATE: Thu, 23 Apr 2026 08:00:00 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hi Bob,
+
+Let's have lunch tomorrow at the usual place around noon.
+
+Cheers,
+Alice

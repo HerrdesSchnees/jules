@@ -1,0 +1,15 @@
+FROM: winner@lottery-intl.net
+TO: lucky@example.com
+SUBJECT: Congratulations! You won $1,000,000
+DATE: Thu, 23 Apr 2026 11:00:00 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+CONGRATULATIONS!
+
+You have been selected as the winner of our international lottery.
+To claim your prize of $1,000,000 USD, please send your bank details.
+
+Act now! Limited time offer!
+
+Contact: claims@lottery-intl.net

@@ -1,0 +1,15 @@
+FROM: marketing@newsletter.com
+TO: subscriber@example.com
+SUBJECT: Special offer: 50% off everything
+DATE: Thu, 23 Apr 2026 12:00:00 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Dear Valued Customer,
+
+We have a special promotion this week.
+Get 50% off all products with code SAVE50.
+
+This is a legitimate marketing email from our store.
+
+Unsubscribe: https://newsletter.com/unsubscribe

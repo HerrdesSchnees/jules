@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  rspamd:
+    image: rspamd/rspamd:stable
+    container_name: jules-rspamd
+    ports:
+      - "11334:11334"
+      - "11333:11333"
+    volumes:
+      - ./rspamd/local.d:/etc/rspamd/local.d:ro
+      - rspamd-data:/var/lib/rspamd
+    networks:
+      - jules-net
+    restart: unless-stopped
+
+  dovecot:
+    image: dovecot/dovecot:latest
+    container_name: jules-dovecot
+    volumes:
+      - ./dovecot/conf.d:/etc/dovecot/conf.d:ro
+      - ./testdata/mail:/var/mail/vagrant:ro
+      - dovecot-data:/var/mail
+    networks:
+      - jules-net
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: jules-worker
+    environment:
+      - JULES_MODE=simulation
+      - IMAP_SERVER=jules-dovecot
+      - IMAP_PORT=143
+      - IMAP_USER=vagrant
+      - IMAP_PASS=vagrant
+      - RSPAMD_URL=http://jules-rspamd:11334
+      - LOG_LEVEL=DEBUG
+      - DRY_RUN=true
+    volumes:
+      - ./logs:/app/logs
+      - ./state:/app/state
+      - ./testdata:/app/testdata:ro
+    networks:
+      - jules-net
+    depends_on:
+      - rspamd
+      - dovecot
+    restart: unless-stopped
+
+networks:
+  jules-net:
+    driver: bridge
+
+volumes:
+  rspamd-data:
+  dovecot-data:

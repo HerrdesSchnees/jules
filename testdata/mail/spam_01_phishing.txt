@@ -1,0 +1,14 @@
+FROM: noreply@amaz0n-security.com
+TO: victim@example.com
+SUBJECT: URGENT: Your account has been compromised
+DATE: Thu, 23 Apr 2026 10:00:00 +0200
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+
+<html>
+<body>
+<p>Dear Customer,</p>
+<p>Your account has been suspended. Click <a href="http://evil.com/steal">here</a> to verify.</p>
+<p>Urgent action required within 24 hours!</p>
+</body>
+</html>

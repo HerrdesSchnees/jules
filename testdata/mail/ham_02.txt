@@ -1,0 +1,14 @@
+FROM: team@company.com
+TO: bob@example.com
+SUBJECT: Weekly status report
+DATE: Thu, 23 Apr 2026 09:00:00 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hi all,
+
+Please find the weekly status report attached.
+Let me know if you have any questions.
+
+Regards,
+Project Team
