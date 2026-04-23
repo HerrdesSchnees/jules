@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: imap-worker
+    restart: unless-stopped
+    volumes:
+      - ./worker:/app/worker
+      - ./data:/app/data
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    depends_on:
+      - rspamd
+      - dovecot
+
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: rspamd
+    restart: unless-stopped
+    volumes:
+      - ./rspamd/local.d:/etc/rspamd/local.d
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: unless-stopped
+
+  dovecot:
+    image: dovecot/dovecot:latest
+    container_name: dovecot
+    volumes:
+      - ./dovecot/dovecot.conf:/etc/dovecot/dovecot.conf
+      - ./data/state/dovecot:/var/mail
+    ports:
+      - "143:143"

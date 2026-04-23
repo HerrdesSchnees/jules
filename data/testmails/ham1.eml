@@ -1,0 +1,8 @@
+From: sender@example.com
+To: test@example.com
+Subject: Test Ham 1
+Message-ID: <ham1@example.com>
+Date: Mon, 1 Jan 2024 10:00:00 +0000
+
+This is a perfectly normal email message.
+It should be classified as ham.
