@@ -1,5 +1,3 @@
-# AGENTS.md für jules
-
 # IMAP Worker for Rspamd
 
 ## Überblick
@@ -102,6 +100,21 @@ Erwartet werden:
 - Dry-Run muss möglich sein
 - `.env.example` statt echter `.env`
 
+## Lokale Konfiguration
+Im Repository liegt nur eine `.env.example`.
+Für den echten Betrieb legst du lokal eine `.env` an. Diese Datei wird nicht committed.
+
+Empfohlener Ablauf:
+1. `.env.example` nach `.env` kopieren
+2. zuerst Simulationswerte beibehalten
+3. lokale Tests durchführen
+4. erst danach die echten IMAP-Werte eintragen
+
+Beispiel:
+```bash
+cp .env.example .env
+```
+
 ## Entwicklungsprinzipien
 - Einfachheit vor Overengineering
 - Transparenz vor Magie
@@ -135,6 +148,24 @@ Das Projekt soll mindestens enthalten:
 6. Logging testen
 7. End-to-End-Simulation erfolgreich durchführen
 8. erst danach Real-IMAP-Modus vorbereiten
+
+## Schnellstart
+### Simulation
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+### Debug-Check
+```bash
+python3 debug.py
+```
+
+### Wechsel auf Real-IMAP
+- `.env` lokal anpassen
+- `JULES_MODE=real` setzen
+- echte IMAP-Werte eintragen
+- `DRY_RUN=true` beim ersten Lauf beibehalten
 
 ## Debugging
 Das Projekt soll mindestens ein Debugging-Skript bereitstellen, das folgende Punkte testet:
