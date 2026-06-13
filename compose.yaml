@@ -14,17 +14,6 @@ services:
       - jules-net
     restart: unless-stopped
 
-  dovecot:
-    image: dovecot/dovecot:latest
-    container_name: jules-dovecot
-    volumes:
-      - ./dovecot/conf.d:/etc/dovecot/conf.d:ro
-      - ./testdata/mail:/var/mail/vagrant:ro
-      # - dovecot-data:/var/mail
-    networks:
-      - jules-net
-    restart: unless-stopped
-
   worker:
     build:
       context: .
@@ -33,12 +22,12 @@ services:
     env_file:
       - .env
     environment:
-      JULES_MODE: ${JULES_MODE:-simulation}
-      IMAP_SERVER: ${IMAP_SERVER:-jules-dovecot}
-      IMAP_PORT: ${IMAP_PORT:-143}
-      IMAP_USER: ${IMAP_USER:-vagrant}
-      IMAP_PASS: ${IMAP_PASS:-vagrant}
-      IMAP_SSL: ${IMAP_SSL:-false}
+      JULES_MODE: ${JULES_MODE:-real}
+      IMAP_SERVER: ${IMAP_SERVER:-imap.a1.net}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      IMAP_USER: ${IMAP_USER:-}
+      IMAP_PASS: ${IMAP_PASS:-}
+      IMAP_SSL: ${IMAP_SSL:-true}
       IMAP_MAILBOX: ${IMAP_MAILBOX:-INBOX}
       JUNK_MAILBOX: ${JUNK_MAILBOX:-Junk}
       RSPAMD_URL: ${RSPAMD_URL:-http://jules-rspamd:11334}
@@ -48,12 +37,10 @@ services:
     volumes:
       - /mnt/user/appdata/jules-imap-worker/logs:/app/logs
       - /mnt/user/appdata/jules-imap-worker/state:/app/state
-      - ./testdata:/app/testdata:ro
     networks:
       - jules-net
     depends_on:
       - rspamd
-      - dovecot
     restart: unless-stopped
 
 networks:
@@ -62,4 +49,3 @@ networks:
 
 volumes:
   rspamd-data:
-  # dovecot-data:
