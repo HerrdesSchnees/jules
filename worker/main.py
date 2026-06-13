@@ -25,6 +25,7 @@ IMAP_SSL = os.getenv("IMAP_SSL", "false").lower() == "true"
 IMAP_MAILBOX = os.getenv("IMAP_MAILBOX", "INBOX")
 JUNK_MAILBOX = os.getenv("JUNK_MAILBOX", "Junk")
 RSPAMD_URL = os.getenv("RSPAMD_URL", "http://jules-rspamd:11334")
+RSPAMD_PASSWORD = os.getenv("RSPAMD_PASSWORD", "")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 
@@ -89,12 +90,16 @@ def mark_processed(message_key: str, source_uid: str, subject: str, score: float
 
 
 def analyze_with_rspamd(raw_mail: bytes) -> dict:
-    """Send raw mail to Rspamd and return parsed response."""
+    """Send raw mail to Rspamd controller and return parsed response."""
     try:
+        headers = {"Content-Type": "message/rfc822"}
+        if RSPAMD_PASSWORD:
+            headers["Password"] = RSPAMD_PASSWORD
+
         resp = requests.post(
             f"{RSPAMD_URL}/checkv2",
             data=raw_mail,
-            headers={"Content-Type": "message/rfc822"},
+            headers=headers,
             timeout=30,
         )
         resp.raise_for_status()
