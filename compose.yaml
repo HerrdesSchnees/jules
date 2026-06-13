@@ -1,6 +1,13 @@
 name: jules-imap-worker
 
 services:
+  redis:
+    image: redis:alpine
+    container_name: jules-redis
+    restart: unless-stopped
+    networks:
+      - jules-net
+
   rspamd:
     image: rspamd/rspamd:latest
     container_name: jules-rspamd
@@ -12,6 +19,8 @@ services:
       - rspamd-data:/var/lib/rspamd
     networks:
       - jules-net
+    depends_on:
+      - redis
     restart: unless-stopped
 
   worker:
@@ -31,6 +40,7 @@ services:
       IMAP_MAILBOX: ${IMAP_MAILBOX:-INBOX}
       JUNK_MAILBOX: ${JUNK_MAILBOX:-Junk}
       RSPAMD_URL: ${RSPAMD_URL:-http://jules-rspamd:11334}
+      RSPAMD_PASSWORD: ${RSPAMD_PASSWORD:-}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
       DRY_RUN: ${DRY_RUN:-true}
       CHECK_INTERVAL: ${CHECK_INTERVAL:-300}
