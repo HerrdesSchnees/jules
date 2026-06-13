@@ -1,0 +1,19 @@
+# Local configuration
+.env
+.env.local
+
+# Runtime data
+logs/
+state/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
