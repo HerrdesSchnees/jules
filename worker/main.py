@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Jules IMAP Worker - Simulation Mode
-Reads mails from IMAP, sends to Rspamd for analysis, logs decisions.
+Jules IMAP Worker - Simulation/Real Mode
+Reads mails from IMAP, sends to Rspamd for analysis, and logs decisions.
 """
 
-import imaplib
 import email
-import requests
-import json
-import sqlite3
-import os
+import hashlib
+import imaplib
 import logging
-import time
+import os
+import sqlite3
 from datetime import datetime
 from pathlib import Path
+
+import requests
 
 # Config
 MODE = os.getenv("JULES_MODE", "simulation")
@@ -21,6 +21,9 @@ IMAP_SERVER = os.getenv("IMAP_SERVER", "jules-dovecot")
 IMAP_PORT = int(os.getenv("IMAP_PORT", "143"))
 IMAP_USER = os.getenv("IMAP_USER", "vagrant")
 IMAP_PASS = os.getenv("IMAP_PASS", "vagrant")
+IMAP_SSL = os.getenv("IMAP_SSL", "false").lower() == "true"
+IMAP_MAILBOX = os.getenv("IMAP_MAILBOX", "INBOX")
+JUNK_MAILBOX = os.getenv("JUNK_MAILBOX", "Junk")
 RSPAMD_URL = os.getenv("RSPAMD_URL", "http://jules-rspamd:11334")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
@@ -33,7 +36,7 @@ STATE_DIR.mkdir(exist_ok=True)
 
 # Logging
 logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL.upper()),
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.FileHandler(LOG_DIR / "worker.log"),
@@ -45,38 +48,45 @@ logger = logging.getLogger("jules")
 # State DB
 STATE_DB = STATE_DIR / "state.db"
 
-def init_state():
+
+def init_state() -> None:
     conn = sqlite3.connect(str(STATE_DB))
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS processed (
-        msg_id TEXT PRIMARY KEY,
-        subject TEXT,
-        score REAL,
-        action TEXT,
-        is_spam INTEGER,
-        processed_at TEXT
-    )''')
+    c.execute(
+        '''CREATE TABLE IF NOT EXISTS processed (
+            msg_id TEXT PRIMARY KEY,
+            source_uid TEXT,
+            subject TEXT,
+            score REAL,
+            action TEXT,
+            is_spam INTEGER,
+            processed_at TEXT
+        )'''
+    )
     conn.commit()
     conn.close()
     logger.info("State DB initialized")
 
-def is_processed(msg_id: str) -> bool:
+
+def is_processed(message_key: str) -> bool:
     conn = sqlite3.connect(str(STATE_DB))
     c = conn.cursor()
-    c.execute("SELECT 1 FROM processed WHERE msg_id = ?", (msg_id,))
+    c.execute("SELECT 1 FROM processed WHERE msg_id = ?", (message_key,))
     result = c.fetchone() is not None
     conn.close()
     return result
 
-def mark_processed(msg_id: str, subject: str, score: float, action: str, is_spam: bool):
+
+def mark_processed(message_key: str, source_uid: str, subject: str, score: float, action: str, is_spam: bool) -> None:
     conn = sqlite3.connect(str(STATE_DB))
     c = conn.cursor()
     c.execute(
-        "INSERT OR REPLACE INTO processed VALUES (?, ?, ?, ?, ?, ?)",
-        (msg_id, subject, score, action, int(is_spam), datetime.now().isoformat())
+        "INSERT OR REPLACE INTO processed VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (message_key, source_uid, subject, score, action, int(is_spam), datetime.now().isoformat())
     )
     conn.commit()
     conn.close()
+
 
 def analyze_with_rspamd(raw_mail: bytes) -> dict:
     """Send raw mail to Rspamd and return parsed response."""
@@ -85,7 +95,7 @@ def analyze_with_rspamd(raw_mail: bytes) -> dict:
             f"{RSPAMD_URL}/checkv2",
             data=raw_mail,
             headers={"Content-Type": "message/rfc822"},
-            timeout=30
+            timeout=30,
         )
         resp.raise_for_status()
         return resp.json()
@@ -93,78 +103,120 @@ def analyze_with_rspamd(raw_mail: bytes) -> dict:
         logger.error(f"Rspamd request failed: {e}")
         return {}
 
-def process_mailbox():
-    logger.info(f"Starting worker in {MODE} mode (dry_run={DRY_RUN})")
-    
-    try:
-        # Connect to IMAP
+
+def get_message_key(msg) -> str:
+    """Prefer Message-ID, otherwise derive a stable fallback key."""
+    message_id = (msg.get("Message-ID") or "").strip()
+    if message_id:
+        return message_id
+
+    digest_src = "|".join(
+        [
+            msg.get("Date", ""),
+            msg.get("From", ""),
+            msg.get("To", ""),
+            msg.get("Subject", ""),
+        ]
+    )
+    digest = hashlib.sha256(digest_src.encode("utf-8", errors="ignore")).hexdigest()
+    return f"fallback-{digest}"
+
+
+def should_treat_as_spam(result: dict, score: float, required: float) -> bool:
+    action = (result.get("action") or "").lower()
+    spam_actions = {"reject", "add header", "rewrite subject", "soft reject"}
+    return action in spam_actions or score >= required
+
+
+def open_imap_connection():
+    if IMAP_SSL:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+    else:
         mail = imaplib.IMAP4(IMAP_SERVER, IMAP_PORT)
-        mail.login(IMAP_USER, IMAP_PASS)
-        mail.select("inbox")
-        logger.info(f"Connected to IMAP {IMAP_SERVER}:{IMAP_PORT}")
-        
-        # Search for all messages
+    mail.login(IMAP_USER, IMAP_PASS)
+    return mail
+
+
+def process_mailbox() -> None:
+    logger.info(
+        "Starting worker in %s mode (dry_run=%s, mailbox=%s, server=%s:%s)",
+        MODE,
+        DRY_RUN,
+        IMAP_MAILBOX,
+        IMAP_SERVER,
+        IMAP_PORT,
+    )
+
+    try:
+        mail = open_imap_connection()
+        mail.select(IMAP_MAILBOX)
+        logger.info("Connected to IMAP %s:%s", IMAP_SERVER, IMAP_PORT)
+
         _, data = mail.search(None, "ALL")
         msg_ids = data[0].split()
-        logger.info(f"Found {len(msg_ids)} messages")
-        
-        for msg_id in msg_ids:
-            msg_id_str = msg_id.decode()
-            
-            if is_processed(msg_id_str):
-                logger.debug(f"Skipping already processed: {msg_id_str}")
+        logger.info("Found %d messages", len(msg_ids))
+
+        for msg_uid in msg_ids:
+            uid_text = msg_uid.decode()
+
+            _, msg_data = mail.fetch(msg_uid, "(RFC822)")
+            if not msg_data or not msg_data[0]:
+                logger.warning("Could not fetch message UID %s", uid_text)
                 continue
-            
-            # Fetch raw mail
-            _, msg_data = mail.fetch(msg_id, "(RFC822)")
+
             raw_mail = msg_data[0][1]
-            
-            # Parse for subject
             msg = email.message_from_bytes(raw_mail)
             subject = msg.get("Subject", "(no subject)")
-            
-            # Analyze with Rspamd
-            result = analyze_with_rspamd(raw_mail)
-            
-            if not result:
-                logger.warning(f"No Rspamd result for {msg_id_str}")
+            message_key = get_message_key(msg)
+
+            if is_processed(message_key):
+                logger.debug("Skipping already processed: %s", message_key)
                 continue
-            
-            score = result.get("score", 0.0)
-            required = result.get("required_score", 6.0)
+
+            result = analyze_with_rspamd(raw_mail)
+            if not result:
+                logger.warning("No Rspamd result for %s", message_key)
+                continue
+
+            score = float(result.get("score", 0.0))
+            required = float(result.get("required_score", 6.0))
             action = result.get("action", "unknown")
             symbols = list(result.get("symbols", {}).keys())
-            
-            is_spam = score >= required
-            
+            is_spam = should_treat_as_spam(result, score, required)
+
             logger.info(
-                f"Mail: {subject[:60]} | Score: {score:.2f}/{required:.2f} | "
-                f"Action: {action} | Spam: {is_spam} | Symbols: {symbols[:5]}"
+                "Mail: %s | Key: %s | Score: %.2f/%.2f | Action: %s | Spam: %s | Symbols: %s",
+                subject[:60],
+                message_key,
+                score,
+                required,
+                action,
+                is_spam,
+                symbols[:5],
             )
-            
-            # Record state
-            mark_processed(msg_id_str, subject, score, action, is_spam)
-            
+
+            mark_processed(message_key, uid_text, subject, score, action, is_spam)
+
             if DRY_RUN:
-                logger.info(f"[DRY-RUN] Would {'move to spam' if is_spam else 'keep in inbox'}")
-            else:
-                if is_spam:
-                    # Move to spam folder (real mode)
-                    mail.copy(msg_id, "Junk")
-                    mail.store(msg_id, "+FLAGS", "\\Deleted")
-                    logger.info(f"Moved to Junk: {msg_id_str}")
-        
+                logger.info("[DRY-RUN] Would %s", "move to spam" if is_spam else "keep in inbox")
+            elif is_spam:
+                mail.copy(msg_uid, JUNK_MAILBOX)
+                mail.store(msg_uid, "+FLAGS", "\\Deleted")
+                logger.info("Moved to %s: %s", JUNK_MAILBOX, message_key)
+
         mail.close()
         mail.logout()
         logger.info("Worker cycle complete")
-        
+
     except Exception as e:
         logger.error(f"Worker error: {e}", exc_info=True)
 
-def main():
+
+def main() -> None:
     init_state()
     process_mailbox()
     logger.info("Worker finished")
+
 
 if __name__ == "__main__":
     main()
