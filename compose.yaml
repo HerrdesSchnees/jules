@@ -1,4 +1,4 @@
-version: "3.8"
+name: jules-imap-worker
 
 services:
   rspamd:
@@ -20,7 +20,7 @@ services:
     volumes:
       - ./dovecot/conf.d:/etc/dovecot/conf.d:ro
       - ./testdata/mail:/var/mail/vagrant:ro
-      - dovecot-data:/var/mail
+      # - dovecot-data:/var/mail
     networks:
       - jules-net
     restart: unless-stopped
@@ -46,8 +46,8 @@ services:
       DRY_RUN: ${DRY_RUN:-true}
       CHECK_INTERVAL: ${CHECK_INTERVAL:-300}
     volumes:
-      - ./logs:/app/logs
-      - ./state:/app/state
+      - /mnt/user/appdata/jules-imap-worker/logs:/app/logs
+      - /mnt/user/appdata/jules-imap-worker/state:/app/state
       - ./testdata:/app/testdata:ro
     networks:
       - jules-net
@@ -62,4 +62,4 @@ networks:
 
 volumes:
   rspamd-data:
-  dovecot-data:
+  # dovecot-data:
