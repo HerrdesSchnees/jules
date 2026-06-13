@@ -30,15 +30,21 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     container_name: jules-worker
+    env_file:
+      - .env
     environment:
-      - JULES_MODE=simulation
-      - IMAP_SERVER=jules-dovecot
-      - IMAP_PORT=143
-      - IMAP_USER=vagrant
-      - IMAP_PASS=vagrant
-      - RSPAMD_URL=http://jules-rspamd:11334
-      - LOG_LEVEL=DEBUG
-      - DRY_RUN=true
+      JULES_MODE: ${JULES_MODE:-simulation}
+      IMAP_SERVER: ${IMAP_SERVER:-jules-dovecot}
+      IMAP_PORT: ${IMAP_PORT:-143}
+      IMAP_USER: ${IMAP_USER:-vagrant}
+      IMAP_PASS: ${IMAP_PASS:-vagrant}
+      IMAP_SSL: ${IMAP_SSL:-false}
+      IMAP_MAILBOX: ${IMAP_MAILBOX:-INBOX}
+      JUNK_MAILBOX: ${JUNK_MAILBOX:-Junk}
+      RSPAMD_URL: ${RSPAMD_URL:-http://jules-rspamd:11334}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      DRY_RUN: ${DRY_RUN:-true}
+      CHECK_INTERVAL: ${CHECK_INTERVAL:-300}
     volumes:
       - ./logs:/app/logs
       - ./state:/app/state
