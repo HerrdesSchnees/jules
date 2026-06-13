@@ -8,7 +8,7 @@ Der Schwerpunkt liegt auf:
 - guter Debugbarkeit
 - Docker-basierter Reproduzierbarkeit
 - persistenter Zustands- und Log-Verwaltung
-- lokaler Simulation vor produktivem IMAP-Deploy
+- direktem Dry-Run gegen ein echtes IMAP-Konto ohne produktive Mailbewegungen
 
 ## Projektziel
 Der Worker soll:
@@ -23,23 +23,14 @@ Der Worker soll:
 ## Betriebsmodi
 Dieses Projekt unterscheidet zwei klar getrennte Modi.
 
-### 1. Simulation Mode
-Der Simulation Mode ist die Standard- und Erstbetriebsart.
-Er dient dazu, den kompletten Workflow lokal und ohne echtes externes Mailkonto zu testen.
+### 1. Real IMAP Dry-Run
+Der Standardpfad ist jetzt der direkte Dry-Run gegen ein echtes IMAP-Konto.
+Dabei verbindet sich der Worker direkt zum Mailprovider, liest Mails, bewertet sie mit Rspamd und protokolliert nur die Entscheidungen.
+Solange `DRY_RUN=true` gesetzt ist, werden keine Mails verschoben oder gelöscht.
 
-Im Simulationsmodus soll überprüfbar sein:
-- Mail-Erkennung
-- Übergabe an Rspamd
-- Parsing der Rspamd-Antwort
-- Zustandsverwaltung
-- Logging
-- Entscheidungslogik
-
-### 2. Real IMAP Mode
-Der Real IMAP Mode ist für den späteren produktiven oder semi-produktiven Betrieb gedacht.
-Er wird erst vorbereitet, nachdem die lokale Simulation stabil funktioniert.
-
-Im Real IMAP Mode werden echte IMAP-Zugangsdaten verwendet, die niemals hart codiert, sondern nur über Umgebungsvariablen oder externe Konfigurationsdateien eingebunden werden.
+### 2. Späterer Echtbetrieb
+Der spätere Echtbetrieb ist möglich, sobald der Dry-Run stabil läuft.
+Dann kann `DRY_RUN=false` gesetzt werden. Die Zugangsdaten bleiben weiterhin lokal in `.env` und werden niemals committed.
 
 ## Architektur
 Die Zielarchitektur besteht aus folgenden Komponenten:
@@ -49,7 +40,6 @@ Die Zielarchitektur besteht aus folgenden Komponenten:
 - optional Redis, falls für Rspamd sinnvoll
 - persistente Logs
 - persistenter Worker-State
-- lokale Testmails / Simulationsquelle
 
 ### Python Worker
 Der Worker ist die zentrale Logik dieses Projekts.
@@ -79,7 +69,6 @@ Das Projekt muss so aufgebaut sein, dass die folgenden Daten persistent auf Host
 - Logs
 - Worker-State
 - optionale Datenbanken
-- optionale Testartefakte
 
 Diese Daten dürfen bei Container-Neustarts nicht verloren gehen.
 
@@ -94,7 +83,7 @@ Erwartet werden:
 
 ## Sicherheitsprinzipien
 - Keine echten Zugangsdaten in den Quellcode
-- Keine echten Zugangsdaten in `docker-compose.yml`
+- Keine echten Zugangsdaten in `compose.yaml`
 - Keine echten Zugangsdaten in `README.md`
 - Keine produktiven Mailaktionen ohne klaren Betriebsmodus
 - Dry-Run muss möglich sein
@@ -106,9 +95,10 @@ Für den echten Betrieb legst du lokal eine `.env` an. Diese Datei wird nicht co
 
 Empfohlener Ablauf:
 1. `.env.example` nach `.env` kopieren
-2. zuerst Simulationswerte beibehalten
-3. lokale Tests durchführen
-4. erst danach die echten IMAP-Werte eintragen
+2. echte A1-IMAP-Werte lokal eintragen
+3. `DRY_RUN=true` beibehalten
+4. lokale Tests durchführen
+5. erst danach über produktive Mailbewegungen nachdenken
 
 Beispiel:
 ```bash
@@ -119,20 +109,19 @@ cp .env.example .env
 - Einfachheit vor Overengineering
 - Transparenz vor Magie
 - Testbarkeit vor Produktivschaltung
-- zuerst Simulation, dann Realbetrieb
+- zuerst Dry-Run, dann Realbetrieb
 - lokale Reproduzierbarkeit
 - nachvollziehbare Docker-Struktur
 
 ## Erwartete Projektbestandteile
 Das Projekt soll mindestens enthalten:
 
-- `docker-compose.yaml`
-- `Dockerfile` oder mehrere Dockerfiles
+- `compose.yaml`
+- `Dockerfile.worker`
 - Python-Worker-Code
 - Konfigurationsdateien
 - `.env.example`
 - Rspamd-Konfigurationsdateien
-- Testmails
 - Debugging-Skript
 - persistente Log- und State-Pfade
 - diese `README.md`
@@ -141,18 +130,18 @@ Das Projekt soll mindestens enthalten:
 
 ## Erwarteter Entwicklungsablauf
 1. Architekturentscheidung dokumentieren
-2. Simulationsmodus aufbauen
-3. lokale Testmails einbinden
-4. Rspamd-Anbindung testen
-5. Worker-State testen
-6. Logging testen
-7. End-to-End-Simulation erfolgreich durchführen
-8. erst danach Real-IMAP-Modus vorbereiten
+2. direkten Dry-Run gegen IMAP aufbauen
+3. Rspamd-Anbindung testen
+4. Worker-State testen
+5. Logging testen
+6. stabilen Dry-Run durchführen
+7. erst danach produktive Aktionen vorbereiten
 
 ## Schnellstart
-### Simulation
+### A1 Dry-Run
 ```bash
 cp .env.example .env
+# .env lokal mit echten A1-Zugangsdaten befüllen
 docker compose up --build
 ```
 
@@ -161,21 +150,18 @@ docker compose up --build
 python3 debug.py
 ```
 
-### Wechsel auf Real-IMAP
+### Wechsel auf echten Eingriff
 - `.env` lokal anpassen
-- `JULES_MODE=real` setzen
-- echte IMAP-Werte eintragen
-- `DRY_RUN=true` beim ersten Lauf beibehalten
+- `DRY_RUN=false` nur bewusst und erst nach erfolgreichem Dry-Run setzen
+- zuerst weiter gegen INBOX lesen und Ergebnisse kontrollieren
 
 ## Debugging
-Das Projekt soll mindestens ein Debugging-Skript bereitstellen, das folgende Punkte testet:
+Das Projekt stellt ein Debugging-Skript bereit, das folgende Punkte testet:
 
 - Konfiguration vorhanden und lesbar
 - Rspamd erreichbar
-- Worker startet
-- Beispielmail kann verarbeitet werden
-- Rspamd-Antwort wird sichtbar ausgegeben
-- Logs werden geschrieben
+- Worker-Dateien vorhanden
+- `.env.example` enthält die erwarteten Dry-Run-Vorgaben
 - State wird persistiert
 
 ## Abgrenzung
